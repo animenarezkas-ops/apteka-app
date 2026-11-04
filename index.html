@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1677d2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Аптеки">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Моя аптечная база</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f3f6fa}
+*{box-sizing:border-box}body{margin:0;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{background:#1677d2;color:white;padding:22px 18px 18px;border-radius:0 0 22px 22px}
+h1{font-size:23px;margin:0 0 5px}header p{margin:0;opacity:.9;font-size:13px}
+main{max-width:720px;margin:auto;padding:16px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:15px}
+.stat,.panel,.item{background:white;border-radius:16px;padding:15px;box-shadow:0 2px 12px #162b4510}
+.stat b{display:block;font-size:26px}.stat span,.muted{font-size:12px;color:#697586}
+nav{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-bottom:15px}
+button,.button{border:0;border-radius:12px;padding:12px 14px;font:inherit;font-weight:600;background:#1677d2;color:white;cursor:pointer}
+nav button{background:white;color:#1c3554;box-shadow:0 2px 10px #162b4510;min-height:54px}
+button.secondary{background:#eaf2fb;color:#175b9c}button.danger{background:#fff0f0;color:#b42318}
+section{display:none}.active{display:block}.panel{margin-bottom:13px}
+h2{font-size:18px;margin:0 0 13px}
+label{display:block;font-size:13px;font-weight:600;margin:10px 0 5px}
+input,select,textarea{width:100%;border:1px solid #d7dfeb;border-radius:11px;padding:12px;font:inherit;background:white;color:#172033}
+textarea{min-height:70px;resize:vertical}.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1}
+.item{margin:9px 0}.item strong{font-size:16px}.item p{margin:5px 0;font-size:14px}
+.item .actions{display:flex;gap:7px;margin-top:10px}.item .actions button{font-size:12px;padding:9px}
+.search{margin-bottom:12px}
+.empty{text-align:center;color:#697586;padding:24px 8px}
+.medicine-wrap{position:relative}.suggestions{display:none;position:absolute;z-index:20;left:0;right:0;top:100%;max-height:60vh;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;background:#fff;border:1px solid #d7dfeb;border-radius:12px;box-shadow:0 8px 24px #162b4520;margin-top:4px}.suggestions.open{display:block}.suggestion{display:block;width:100%;text-align:left;background:#fff;color:#172033;border-radius:0;border-bottom:1px solid #edf0f5;font-weight:400;padding:12px}.suggestion:last-child{border-bottom:0}.suggestion:active{background:#eaf2fb}.suggestion small{display:block;color:#697586;font-size:11px;margin-top:3px}
+small.note{display:block;color:#697586;line-height:1.45;margin-top:12px}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#172033;color:white;padding:11px 16px;border-radius:20px;display:none;max-width:90%;font-size:13px}
+.supplier-line{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid #e5e7eb;font-size:13px}.supplier-line span{min-width:0;overflow-wrap:anywhere}.supplier-line b:last-child{white-space:nowrap}
+</style>
+</head>
+<body>
+<header><h1>💊 Моя аптечная база</h1><p>Версия 17.1 · актуальные прайсы и история закупок</p></header>
+<main>
+<div class="stats">
+ <div class="stat"><b id="countRequests">0</b><span>Заявок</span></div>
+ <div class="stat"><b id="countPharmacies">0</b><span>Аптек</span></div>
+</div>
+<nav>
+ <button data-tab="add">➕ Добавить заявку</button>
+ <button data-tab="search">🔎 Поиск лекарства</button>
+ <button data-tab="search">📥 Импорт каталога</button>
+ <button data-tab="pharmacies">🏥 Аптеки</button>
+ <button data-tab="all">📋 Все заявки</button>
+ <button data-tab="purchases">🧾 История закупок</button>
+ <button data-tab="supplierPrices">💰 Цены поставщиков</button>
+ <button data-tab="export">📊 Экспорт и копия</button>
+</nav>
+
+<section id="add" class="active">
+ <div class="panel">
+  <h2>Новая заявка</h2>
+  <form id="requestForm">
+   <label for="pharmacy">Аптека</label><select id="pharmacy" required></select>
+   <label for="medicine">Название лекарства и дозировка</label><div class="medicine-wrap"><input id="medicine" autocomplete="off" required placeholder="Например: акр — начни вводить название..."><div id="medicineSuggestions" class="suggestions" role="listbox"></div></div>
+   <label for="note">Комментарий (необязательно)</label><textarea id="note" placeholder="Дополнительная информация"></textarea>
+   <button type="submit" style="width:100%;margin-top:14px">Сохранить заявку</button>
+  </form>
+  <small class="note">Указывай точное название и дозировку, чтобы не путать разные варианты одного лекарства.</small>
+ </div>
+</section>
+
+<section id="search">
+ <div class="panel">
+  <h2>Каталог лекарств</h2>
+  <p class="muted">Загрузи Excel (.xlsx) или CSV-файл со списком товаров или лекарств. После импорта названия появятся в подсказках при создании заявки.</p>
+  <label for="catalogFile">Импорт списка товаров (Excel или CSV)</label>
+  <input type="file" id="catalogFile" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+  <p class="muted" id="catalogCount">В каталоге пока нет лекарств.</p>
+  <button type="button" id="clearCatalog" class="secondary">Очистить каталог</button>
+ </div>
+ <div class="panel">
+  <h2>Поиск в каталоге и заявках</h2>
+  <input class="search" id="searchInput" placeholder="Начни вводить название...">
+  <div id="searchResults"></div>
+ </div>
+</section>
+
+<section id="pharmacies">
+ <div class="panel">
+  <h2>Аптеки</h2>
+  <form id="pharmacyForm" class="row">
+   <input id="pharmacyName" placeholder="Название новой аптеки" required>
+   <button type="submit">Добавить</button>
+  </form>
+  <div id="pharmacyList" style="margin-top:12px"></div>
+ </div>
+</section>
+
+<section id="all">
+ <div class="panel">
+  <h2>Все заявки</h2>
+  <label for="allPharmacyFilter">Показать заявки по аптеке</label>
+  <select id="allPharmacyFilter">
+   <option value="">Все аптеки</option>
+  </select>
+  <label for="allRequestsSearch">Поиск по заявкам</label>
+  <input id="allRequestsSearch" type="search" placeholder="Лекарство, аптека, дозировка или комментарий">
+  <p id="allRequestsCount" class="muted"></p>
+  <div class="actions" style="margin:10px 0;align-items:center">
+   <button id="deleteSelectedRequests" class="danger" type="button">Удалить отмеченные</button>
+   <span id="selectedRequestsCount" class="muted">Отмечено: 0</span>
+  </div>
+  <div id="allRequests"></div>
+ </div>
+</section>
+
+
+<section id="purchases">
+ <div class="panel">
+  <h2>История закупок</h2>
+  <p class="muted">Оптимизировано для больших файлов. Импорт добавляет записи, не затрагивая заявки и каталог. Для скорости показываются результаты порциями.</p>
+  <label for="purchaseFile">Импорт истории закупок (Excel или CSV)</label>
+  <input type="file" id="purchaseFile" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+  <p class="muted" id="purchaseImportInfo">Историю можно пополнять повторным импортом новых файлов.</p>
+  <label for="purchasePharmacy">Общая аптека для создания заявок</label>
+  <select id="purchasePharmacy"></select>
+  <p class="muted">Выбери аптеку один раз. Она будет использоваться для всех кнопок «Создать заявку» в этом разделе.</p>
+  <input id="purchaseSearch" class="search" type="search" placeholder="Название лекарства или код...">
+  <p id="purchaseCount" class="muted"></p>
+  <div id="purchaseResults"></div><button id="purchaseMore" type="button" class="secondary" style="display:none;width:100%;margin-top:10px">Показать ещё</button>
+ </div>
+</section>
+
+
+
+<section id="supplierPrices">
+ <div class="panel">
+  <h2>Цены поставщиков</h2>
+  <p class="muted">Загружай свои прайсы Excel или CSV. Поиск покажет цену, производителя и поставщика; предложения отсортированы от дешёвой цены к высокой.</p>
+  <p class="muted">Загружай ежедневные Excel/CSV-прайсы. Новый файл заменит прежние цены только тех поставщиков, которые указаны в нём. Остальные поставщики и история закупок сохраняются.</p>
+  <label for="supplierFiles">Загрузить новые прайсы (можно выбрать несколько файлов)</label>
+  <input type="file" id="supplierFiles" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple>
+  <p class="muted" id="supplierDataStatus">Прайсы пока не загружены. Добавь Excel или CSV-файлы поставщиков.</p>\n  <button type="button" id="clearSupplierPrices" class="danger" style="width:100%;margin:8px 0">Очистить все прайсы поставщиков</button>
+  <div id="supplierUpdateInfo" class="muted"></div>
+  <input id="supplierSearch" class="search" type="search" placeholder="Начни вводить название лекарства...">
+  <p id="supplierResultsCount" class="muted"></p>
+  <div id="supplierResults"></div>
+ </div>
+</section>
+
+<section id="export">
+ <div class="panel">
+  <h2>Экспорт и резервная копия</h2>
+  <p class="muted">Сохраняй копию регулярно, например раз в неделю. Это защитит данные, если очистится память браузера или поменяется телефон.</p>
+  <button id="csvBtn" style="width:100%;margin:7px 0">Скачать таблицу CSV для Excel</button>
+  <button id="backupBtn" class="secondary" style="width:100%;margin:7px 0">Сохранить полную резервную копию</button>
+  <label for="restoreFile">Восстановить базу из резервной копии JSON</label>
+  <input type="file" id="restoreFile" accept=".json,application/json">
+  <small class="note">Данные сохраняются локально в браузере на этом устройстве. Не удаляй данные Safari, если не сделал резервную копию. Для переноса на другой iPhone используй JSON-копию.</small>
+ </div>
+</section>
+</main>
+<div id="toast"></div>
+<script>
+const KEY='my-pharmacy-database-v1', CATALOG_KEY='my-pharmacy-catalog-v1';
+let data={pharmacies:[],requests:[]}, catalog=[];
+try{data=JSON.parse(localStorage.getItem(KEY))||data}catch(e){}
+try{catalog=JSON.parse(localStorage.getItem(CATALOG_KEY))||[]}catch(e){}
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let purchaseHistory=[{"code":"2386","name":"АБВГД сироп 150 мл","price":46.0,"vendor":"СИФАТ","date":"17/08/26"},{"code":"2386","name":"АБВГД сироп 150 мл","price":46.0,"vendor":"СИФАТ","date":"20/07/26"},{"code":"2386","name":"АБВГД сироп 150 мл","price":47.0,"vendor":"СИФАТ","date":"29/04/26"},{"code":"2386","name":"АБВГД сироп 150 мл","price":47.0,"vendor":"СИФАТ","date":"06/04/26"},{"code":"2386","name":"АБВГД сироп 150 мл","price":47.0,"vendor":"СИФАТ","date":"12/03/26"},{"code":"2386","name":"АБВГД сироп 150 мл","price":46.75,"vendor":"ШАХДИ","date":"30/01/26"},{"code":"2386","name":"АБВГД сироп 150 мл","price":50.6,"vendor":"МИН","date":"02/12/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":50.6,"vendor":"МИН","date":"26/11/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":50.6,"vendor":"МИН","date":"14/11/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":50.6,"vendor":"МИН","date":"05/11/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":50.6,"vendor":"МИН","date":"16/10/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":50.6,"vendor":"МИН","date":"27/09/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":42.0,"vendor":"фарм  плюс","date":"22/09/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":42.0,"vendor":"фарм  плюс","date":"07/09/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":39.0,"vendor":"ШАХДИ","date":"05/07/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":39.0,"vendor":"ШАХДИ","date":"12/06/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":38.5,"vendor":"ФОРС","date":"13/05/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":38.5,"vendor":"ФОРС","date":"06/05/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":38.5,"vendor":"ФОРС","date":"14/04/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":38.5,"vendor":"ФОРС","date":"13/04/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":38.5,"vendor":"ФОРС","date":"07/03/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":38.5,"vendor":"ЗАМ ЗАМ","date":"17/01/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":38.5,"vendor":"КАЗ ФАРМ","date":"15/01/25"},{"code":"2386","name":"АБВГД сироп 150 мл","price":38.5,"vendor":"ФОРС","date":"26/11/24"},{"code":"2386","name":"АБВГД сироп 150 мл","price":38.5,"vendor":"ФОРС","date":"13/11/24"},{"code":"2386","name":"АБВГД сироп 150 мл","price":38.5,"vendor":"ФОРС","date":"07/10/24"},{"code":"2386","name":"АБВГД сироп 150 мл","price":38.2,"vendor":"ЗАМ ЗАМ","date":"23/09/24"},{"code":"2386","name":"АБВГД сироп 150 мл","price":38.5,"vendor":"ФОРС","date":"31/08/24"},{"code":"4731","name":"абидин сироп 200 мл","price":55.0,"vendor":"КАЗ ФАРМ","date":"13/03/26"},{"code":"4685","name":"авенэкс капс №60","price":170.0,"vendor":"в- макс  фирма","date":"14/02/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"30/08/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"17/08/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"08/08/26"},{"code":"1491","name":"авикал - Д №1 амп","price":47.0,"vendor":"СИФАТ","date":"20/07/26"},{"code":"1491","name":"авикал - Д №1 амп","price":47.0,"vendor":"СИФАТ","date":"05/06/26"},{"code":"1491","name":"авикал - Д №1 амп","price":47.0,"vendor":"СИФАТ","date":"19/05/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"29/04/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"24/04/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"10/04/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"26/03/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"19/03/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"03/03/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"14/02/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"05/02/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"05/02/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"27/01/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"15/01/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"14/01/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"03/01/26"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"30/12/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"24/10/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"09/10/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"Саховат","date":"30/09/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"Саховат","date":"27/09/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"11/09/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"01/08/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"25/07/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"22/07/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"12/07/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"25/06/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"19/06/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"16/06/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"13/06/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"Саховат","date":"09/06/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"Саховат","date":"01/06/25"},{"code":"1491","name":"авикал - Д №1 амп","price":50.0,"vendor":"КАЗ ФАРМ","date":"22/05/25"},{"code":"859","name":"авикал - Д №3 амп","price":130.0,"vendor":"КАЗ ФАРМ","date":"01/02/25"},{"code":"1465","name":"автомобильная аптечка","price":48.0,"vendor":"ЭКОНОМ","date":"11/06/26"},{"code":"1465","name":"автомобильная аптечка","price":48.0,"vendor":"ЭКОНОМ","date":"27/05/26"},{"code":"1465","name":"автомобильная аптечка","price":48.0,"vendor":"ЭКОНОМ","date":"19/05/26"},{"code":"1465","name":"автомобильная аптечка","price":47.0,"vendor":"Дармон","date":"12/05/26"},{"code":"1465","name":"автомобильная аптечка","price":48.0,"vendor":"ЭКОНОМ","date":"13/01/26"},{"code":"1465","name":"автомобильная аптечка","price":43.0,"vendor":"Эмити Интернейшнл","date":"28/10/25"},{"code":"1465","name":"автомобильная аптечка","price":44.0,"vendor":"Мадад","date":"03/04/25"},{"code":"1465","name":"автомобильная аптечка","price":38.0,"vendor":"Саховат","date":"27/12/24"},{"code":"1465","name":"автомобильная аптечка","price":38.0,"vendor":"Саховат","date":"27/12/24"},{"code":"1465","name":"автомобильная аптечка","price":38.0,"vendor":"Саховат","date":"26/11/24"},{"code":"1465","name":"автомобильная аптечка","price":44.0,"vendor":"Мадад","date":"22/11/24"},{"code":"1465","name":"автомобильная аптечка","price":44.0,"vendor":"Мадад","date":"23/10/24"},{"code":"1465","name":"автомобильная аптечка","price":38.0,"vendor":"Саховат","date":"23/10/24"},{"code":"1465","name":"автомобильная аптечка","price":44.0,"vendor":"Мадад","date":"19/09/24"},{"code":"1643","name":"автопассит №20 капс","price":42.0,"vendor":"БЕСТ ФАРМ","date":"10/09/26"},{"code":"1643","name":"автопассит №20 капс","price":38.25,"vendor":"ШАХДИ","date":"17/08/26"},{"code":"1643","name":"автопассит №20 капс","price":38.25,"vendor":"ШАХДИ","date":"20/07/26"},{"code":"1643","name":"автопассит №20 капс","price":48.0,"vendor":"Мадад","date":"07/07/26"},{"code":"1643","name":"автопассит №20 капс","price":48.0,"vendor":"Мадад","date":"26/05/26"},{"code":"1643","name":"автопассит №20 капс","price":48.0,"vendor":"Мадад","date":"27/04/26"},{"code":"1643","name":"автопассит №20 капс","price":48.0,"vendor":"Мадад","date":"29/03/26"},{"code":"1643","name":"автопассит №20 капс","price":48.0,"vendor":"Мадад","date":"03/03/26"},{"code":"1643","name":"автопассит №20 капс","price":42.2,"vendor":"КАЗ ФАРМ","date":"25/02/26"},{"code":"1643","name":"автопассит №20 капс","price":42.2,"vendor":"КАЗ ФАРМ","date":"14/02/26"},{"code":"1643","name":"автопассит №20 капс","price":42.2,"vendor":"КАЗ ФАРМ","date":"21/01/26"},{"code":"1643","name":"автопассит №20 капс","price":42.2,"vendor":"КАЗ ФАРМ","date":"14/01/26"},{"code":"1643","name":"автопассит №20 капс","price":41.83,"vendor":"БЕСТ ФАРМ","date":"18/12/25"},{"code":"1643","name":"автопассит №20 капс","price":41.0,"vendor":"ЭКОНОМ","date":"14/12/25"},{"code":"1643","name":"автопассит №20 капс","price":40.8,"vendor":"ШАХДИ","date":"26/11/25"},{"code":"1643","name":"автопассит №20 капс","price":40.8,"vendor":"ШАХДИ","date":"14/11/25"},{"code":"1643","name":"автопассит №20 капс","price":40.8,"vendor":"ШАХДИ","date":"05/11/25"},{"code":"1643","name":"автопассит №20 капс","price":41.0,"vendor":"ЭКОНОМ","date":"22/10/25"},{"code":"1643","name":"автопассит №20 капс","price":40.7,"vendor":"ЗАМ ЗАМ","date":"10/10/25"},{"code":"1643","name":"автопассит №20 капс","price":40.7,"vendor":"ЗАМ ЗАМ","date":"20/09/25"},{"code":"1643","name":"автопассит №20 капс","price":40.7,"vendor":"ЗАМ ЗАМ","date":"03/09/25"},{"code":"1643","name":"автопассит №20 капс","price":40.7,"vendor":"ЗАМ ЗАМ","date":"26/08/25"},{"code":"1643","name":"автопассит №20 капс","price":40.7,"vendor":"ЗАМ ЗАМ","date":"19/08/25"},{"code":"1643","name":"автопассит №20 капс","price":40.7,"vendor":"ЗАМ ЗАМ","date":"01/08/25"},{"code":"1643","name":"автопассит №20 капс","price":40.7,"vendor":"ЗАМ ЗАМ","date":"17/07/25"},{"code":"1643","name":"автопассит №20 капс","price":48.0,"vendor":"Мадад","date":"13/06/25"},{"code":"1643","name":"автопассит №20 капс","price":48.0,"vendor":"Мадад","date":"12/06/25"},{"code":"1643","name":"автопассит №20 капс","price":48.0,"vendor":"Мадад","date":"04/05/25"},{"code":"1643","name":"автопассит №20 капс","price":48.0,"vendor":"Мадад","date":"14/04/25"},{"code":"1643","name":"автопассит №20 капс","price":48.0,"vendor":"Мадад","date":"10/04/25"},{"code":"1643","name":"автопассит №20 капс","price":40.0,"vendor":"КАЗ ФАРМ","date":"26/03/25"},{"code":"1643","name":"автопассит №20 капс","price":40.0,"vendor":"КАЗ ФАРМ","date":"07/03/25"},{"code":"1643","name":"автопассит №20 капс","price":45.0,"vendor":"Мадад","date":"07/02/25"},{"code":"1643","name":"автопассит №20 капс","price":39.0,"vendor":"ЭКОНОМ","date":"27/01/25"},{"code":"1643","name":"автопассит №20 капс","price":39.0,"vendor":"ЭКОНОМ","date":"21/01/25"},{"code":"1643","name":"автопассит №20 капс","price":45.0,"vendor":"Мадад","date":"21/12/24"},{"code":"1643","name":"автопассит №20 капс","price":38.0,"vendor":"ШАХДИ","date":"17/12/24"},{"code":"1643","name":"автопассит №20 капс","price":38.0,"vendor":"ШАХДИ","date":"28/11/24"},{"code":"1643","name":"автопассит №20 капс","price":45.0,"vendor":"Мадад","date":"30/10/24"},{"code":"1643","name":"автопассит №20 капс","price":37.7,"vendor":"ЗАМ ЗАМ","date":"30/08/24"},{"code":"2046","name":"автопассит сироп 100 мл","price":39.6,"vendor":"СИФАТ","date":"27/08/26"},{"code":"2046","name":"автопассит сироп 100 мл","price":39.6,"vendor":"СИФАТ","date":"07/08/26"},{"code":"2046","name":"автопассит сироп 100 мл","price":39.0,"vendor":"СИФАТ","date":"07/07/26"},{"code":"2046","name":"автопассит сироп 100 мл","price":45.0,"vendor":"Мадад","date":"12/06/26"},{"code":"2046","name":"автопассит сироп 100 мл","price":45.0,"vendor":"Мадад","date":"22/05/26"},{"code":"2046","name":"автопассит сироп 100 мл","price":45.0,"vendor":"Мадад","date":"24/04/26"},{"code":"2046","name":"автопассит сироп 100 мл","price":45.0,"vendor":"Мадад","date":"29/03/26"},{"code":"2046","name":"автопассит сироп 100 мл","price":39.0,"vendor":"ЭКОНОМ","date":"25/02/26"},{"code":"2046","name":"автопассит сироп 100 мл","price":39.0,"vendor":"ШАХДИ","date":"04/01/26"},{"code":"2046","name":"автопассит сироп 100 мл","price":39.6,"vendor":"СИФАТ","date":"26/11/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":39.6,"vendor":"СИФАТ","date":"19/11/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":37.0,"vendor":"ФОРС","date":"24/09/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":37.8,"vendor":"ЗАМ ЗАМ","date":"10/09/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":37.8,"vendor":"ЗАМ ЗАМ","date":"09/09/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":37.8,"vendor":"ЗАМ ЗАМ","date":"03/09/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":37.8,"vendor":"ЗАМ ЗАМ","date":"25/07/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":45.0,"vendor":"Мадад","date":"05/06/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":45.0,"vendor":"Мадад","date":"17/05/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":45.0,"vendor":"Мадад","date":"12/05/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":35.6,"vendor":"КАЗ ФАРМ","date":"07/03/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":40.0,"vendor":"Мадад","date":"12/02/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":35.2,"vendor":"ШАХДИ","date":"27/01/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":35.2,"vendor":"ШАХДИ","date":"22/01/25"},{"code":"2046","name":"автопассит сироп 100 мл","price":34.8,"vendor":"ЗАМ ЗАМ","date":"08/10/24"},{"code":"2046","name":"автопассит сироп 100 мл","price":34.8,"vendor":"ЗАМ ЗАМ","date":"07/10/24"},{"code":"2046","name":"автопассит сироп 100 мл","price":33.6,"vendor":"ЗАМ ЗАМ","date":"23/08/24"},{"code":"2617","name":"авторекс А №30 таб","price":52.0,"vendor":"Мадад","date":"26/03/26"},{"code":"2617","name":"авторекс А №30 таб","price":52.0,"vendor":"Мадад","date":"27/01/26"},{"code":"2617","name":"авторекс А №30 таб","price":52.0,"vendor":"Мадад","date":"12/12/25"},{"code":"2617","name":"авторекс А №30 таб","price":52.0,"vendor":"Мадад","date":"13/11/25"},{"code":"2617","name":"авторекс А №30 таб","price":52.0,"vendor":"Мадад","date":"28/08/25"}];
+const PURCHASE_KEY='my-pharmacy-purchase-history-v1';
+try{const savedPurchases=JSON.parse(localStorage.getItem(PURCHASE_KEY));if(Array.isArray(savedPurchases))purchaseHistory=savedPurchases}catch(e){}
+function savePurchases(){try{localStorage.setItem(PURCHASE_KEY,JSON.stringify(purchaseHistory))}catch(e){alert('Не хватило памяти браузера для сохранения истории. Сделай резервную копию и попробуй файл поменьше.')}}
+function purchaseDate(s){const [d,m,y]=String(s).split('/').map(Number);return new Date(y<100?2000+y:y,m-1,d)}
+function normalizePurchaseDate(v){if(v===null||v===undefined||v==='')return '';let s=String(v).trim();if(/^\d+(\.\d+)?$/.test(s)){const dt=new Date(Date.UTC(1899,11,30)+Number(s)*86400000);return String(dt.getUTCDate()).padStart(2,'0')+'/'+String(dt.getUTCMonth()+1).padStart(2,'0')+'/'+String(dt.getUTCFullYear()).slice(-2)}const m=s.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2,4})$/);if(m)return m[1].padStart(2,'0')+'/'+m[2].padStart(2,'0')+'/'+m[3].slice(-2);return s}
+function headerIndex(headers,aliases,fallback){const i=headers.findIndex(h=>aliases.includes(String(h).trim().toLocaleLowerCase('ru-RU').replace(/ё/g,'е')));return i>=0?i:fallback}
+$('purchaseFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const rows=/\.xlsx$/i.test(f.name)?await unzipXlsx(f):parseCSV(await f.text());if(rows.length<2)throw Error('В файле нет строк с закупками');const h=rows[0].map(x=>String(x||'').trim().toLocaleLowerCase('ru-RU').replace(/ё/g,'е'));const ix={code:headerIndex(h,['№','номер','код','артикул'],0),name:headerIndex(h,['наименование','название','лекарство','товар','product'],1),price:headerIndex(h,['цена','цена закупки','стоимость','price'],2),vendor:headerIndex(h,['фирма','поставщик','контрагент','vendor'],3),date:headerIndex(h,['сана','дата','дата закупки','date'],4)};const parsed=rows.slice(1).map(r=>({code:String(r[ix.code]??'').trim(),name:String(r[ix.name]??'').trim(),price:Number(String(r[ix.price]??'').replace(/\s/g,'').replace(',','.')),vendor:String(r[ix.vendor]??'').trim(),date:normalizePurchaseDate(r[ix.date])})).filter(x=>x.name&&Number.isFinite(x.price)&&x.date);if(!parsed.length)throw Error('Не найдены записи. Проверь колонки: №, Наименование, Цена, Фирма, Сана');const key=x=>[x.code,x.name.toLocaleLowerCase('ru-RU'),x.price,x.vendor.toLocaleLowerCase('ru-RU'),x.date].join('|');const seen=new Set(purchaseHistory.map(key));const fresh=parsed.filter(x=>!seen.has(key(x))&&seen.add(key(x)));if(!confirm('В файле найдено записей: '+parsed.length+'. Новых без повторов: '+fresh.length+'. Добавить их в историю закупок?'))return;purchaseHistory.push(...fresh);savePurchases();rebuildPurchaseIndex();renderPurchases(true);$('purchaseImportInfo').textContent='Всего записей в истории: '+purchaseHistory.length.toLocaleString('ru-RU');toast('Добавлено записей: '+fresh.length.toLocaleString('ru-RU'))}catch(err){alert('Не удалось импортировать историю: '+(err.message||'проверь формат файла'))}e.target.value=''});
+let purchaseGroups=[],purchasePage=0,purchaseMatches=[];
+const PURCHASE_PAGE_SIZE=60;
+function rebuildPurchaseIndex(){
+ const map=new Map();
+ for(const r of purchaseHistory){const k=String(r.code||'')+'|'+String(r.name||'');let g=map.get(k);if(!g){g={code:String(r.code||''),name:String(r.name||''),items:[],vendors:new Set(),latest:null,min:null,search:''};map.set(k,g)}g.items.push(r);g.vendors.add(String(r.vendor||''));const dt=purchaseDate(r.date).getTime();if(!g.latest||dt>g.latest.dt)g.latest={...r,dt};if(!g.min||Number(r.price)<Number(g.min.price))g.min=r;}
+ purchaseGroups=Array.from(map.values());
+ for(const g of purchaseGroups){g.search=(g.name+' '+g.code).toLocaleLowerCase('ru-RU');g.items.sort((a,b)=>purchaseDate(b.date)-purchaseDate(a.date));g.vendorsText=Array.from(g.vendors).filter(Boolean).join(', ')}
+}
+rebuildPurchaseIndex();
+function renderPurchases(reset=true){
+ const box=$('purchaseResults');if(!box)return;if(reset)purchasePage=0;
+ const q=($('purchaseSearch').value||'').trim().toLocaleLowerCase('ru-RU');
+ if(reset){purchaseMatches=q?purchaseGroups.filter(g=>g.search.includes(q)):purchaseGroups;}
+ const totalRecords=purchaseMatches.reduce((n,g)=>n+g.items.length,0);
+ $('purchaseCount').textContent='Найдено лекарств: '+purchaseMatches.length.toLocaleString('ru-RU')+' · записей закупок: '+totalRecords.toLocaleString('ru-RU')+' · показано: '+Math.min((purchasePage+1)*PURCHASE_PAGE_SIZE,purchaseMatches.length).toLocaleString('ru-RU');
+ const visible=purchaseMatches.slice(purchasePage*PURCHASE_PAGE_SIZE,(purchasePage+1)*PURCHASE_PAGE_SIZE);
+ box.innerHTML=visible.length?visible.map(g=>{const latest=g.latest,min=g.min;return `<div class="item" data-purchase-code="${esc(g.code)}"><strong>${esc(g.name)}</strong><p class="muted">Код: ${esc(g.code)} · Покупок: ${g.items.length.toLocaleString('ru-RU')}</p><p>Последняя закупка: <b>${Number(latest.price).toLocaleString('ru-RU')} · ${esc(latest.vendor)}</b> (${esc(latest.date)})</p><p>Минимальная цена в истории: <b>${Number(min.price).toLocaleString('ru-RU')}</b> · ${esc(min.vendor)} (${esc(min.date)})</p><p class="muted">Поставщики: ${esc(g.vendorsText)}</p><details><summary>Показать все ${g.items.length.toLocaleString('ru-RU')} закупок</summary><div style="max-height:260px;overflow:auto">${g.items.map(x=>`<p>${esc(x.date)} — ${Number(x.price).toLocaleString('ru-RU')} — ${esc(x.vendor)}</p>`).join('')}</div></details><div class="purchase-request-actions" style="margin-top:12px;padding-top:10px;border-top:1px solid #edf0f5"><button type="button" class="purchase-create-request" style="width:100%" ${data.pharmacies.length ? '' : 'disabled'}>Создать заявку с полной историей</button></div></div>`}).join(''):'<div class="empty">Ничего не найдено. Попробуй другое название или код.</div>';
+ $('purchaseMore').style.display=(purchasePage+1)*PURCHASE_PAGE_SIZE<purchaseMatches.length?'block':'none';
+}
+let purchaseSearchTimer;
+$('purchaseSearch').addEventListener('input',()=>{clearTimeout(purchaseSearchTimer);purchaseSearchTimer=setTimeout(()=>renderPurchases(true),180)});
+$('purchaseMore').addEventListener('click',()=>{purchasePage++;renderPurchases(false)});
+$('purchaseResults').addEventListener('click',e=>{
+ const button=e.target.closest('.purchase-create-request');
+ if(!button)return;
+ const card=button.closest('.item');
+ const pharmacyId=$('purchasePharmacy')?.value||'';
+ const medicine=card?.querySelector('strong')?.textContent?.trim()||'';
+ if(!pharmacyId){alert('Сначала добавь аптеку в разделе «Аптеки» и выбери её в общем списке.');return}
+ const norm=v=>String(v||'').trim().toLocaleLowerCase('ru-RU').replace(/\s+/g,' ');
+ const duplicate=data.requests.some(r=>r.pharmacyId===pharmacyId&&norm(r.medicine)===norm(medicine));
+ if(duplicate){alert('Это лекарство уже есть в заявках выбранной аптеки. Повторная заявка не создана.');return}
+ const code=card?.dataset.purchaseCode||'';
+ const group=purchaseGroups.find(g=>String(g.code||'')===code&&norm(g.name)===norm(medicine));
+ const history=group?group.items.map(x=>({code:String(x.code||''),name:String(x.name||''),date:String(x.date||''),price:Number(x.price),vendor:String(x.vendor||'')})):[];
+ const historyText=history.map(x=>`${x.date} — ${Number(x.price).toLocaleString('ru-RU')} — ${x.vendor}`).join('\n');
+ data.requests.unshift({id:crypto.randomUUID(),pharmacyId,medicine,note:'',purchaseHistory:history,purchaseHistoryText:historyText,createdAt:new Date().toISOString()});
+ save();
+ button.textContent='Заявка создана ✓';
+ button.disabled=true;
+ toast('Заявка создана. Скопировано закупок: '+history.length.toLocaleString('ru-RU'));
+});
+function renderPurchasePharmacy(){const el=$('purchasePharmacy');if(!el)return;const selected=el.value;el.innerHTML=data.pharmacies.length?data.pharmacies.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join(''):'<option value="">Сначала добавь аптеку</option>';if(data.pharmacies.some(p=>p.id===selected))el.value=selected;}
+
+function save(){localStorage.setItem(KEY,JSON.stringify(data));render()}
+function saveCatalog(){try{localStorage.setItem(CATALOG_KEY,JSON.stringify(catalog));renderSearch();renderCatalogInfo();toast('Каталог сохранён: '+catalog.length.toLocaleString('ru-RU')+' названий')}catch(e){alert('Не хватило памяти браузера для каталога. Попробуй очистить старый каталог или импортировать файл меньшего размера.')}}
+function renderCatalogInfo(){$('catalogCount').textContent=catalog.length?'В каталоге '+catalog.length.toLocaleString('ru-RU')+' названий.':'В каталоге пока нет лекарств.'}
+function parseCSV(text){const first=text.charCodeAt(0)===0xFEFF?text.slice(1):text;const rows=[];let row=[],cell='',quoted=false;for(let i=0;i<first.length;i++){const c=first[i],n=first[i+1];if(c==='"'&&quoted&&n==='"'){cell+='"';i++}else if(c==='"'){quoted=!quoted}else if((c===','||c===';'||c==='\t')&&!quoted){row.push(cell);cell=''}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&n==='\n')i++;row.push(cell);if(row.some(x=>x.trim()))rows.push(row);row=[];cell=''}else cell+=c}row.push(cell);if(row.some(x=>x.trim()))rows.push(row);return rows}
+function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2300)}
+function switchTab(id){document.querySelectorAll('main section').forEach(s=>s.classList.toggle('active',s.id===id));if(id==='search')renderSearch();if(id==='all')renderAll();if(id==='purchases')renderPurchases();if(id==='supplierPrices'&&!supplierReady)loadSupplierData()}
+
+// Прайсы поставщиков начинаются пустыми: пользователь загружает их самостоятельно.
+let supplierRows=[],supplierReady=false,supplierGroups=[];
+async function loadSupplierData(){
+ try{
+  const freshKey='apteka-supplier-prices-started-v17-1';
+  if(!localStorage.getItem(freshKey)){
+   // Однократно начинаем с пустых прайсов; остальные хранилища приложения не трогаем.
+   await supplierDbPut({rows:[],updated:{}});
+   localStorage.setItem(freshKey,'1');
+  }
+  const saved=await supplierDbGet();
+  supplierRows=saved&&Array.isArray(saved.rows)?saved.rows:[];
+  supplierUpdated=saved&&saved.updated?saved.updated:{};
+  rebuildSupplierGroups();supplierReady=true;
+  $('supplierDataStatus').textContent=supplierRows.length
+   ?'Загружено '+supplierRows.length.toLocaleString('ru-RU')+' записей от '+new Set(supplierRows.map(r=>r.firma)).size+' поставщиков.'
+   :'Прайсы пока не загружены. Добавь Excel или CSV-файлы поставщиков.';
+  renderSupplierUpdateInfo();renderSupplierPrices();
+ }catch(err){$('supplierDataStatus').textContent='Не удалось открыть прайсы: '+err.message;}
+}
+// Локальное хранилище прайсов: не зависит от очистки/перезаписи каталога и заявок.
+const SUPPLIER_DB='apteka-supplier-prices-v1';
+function supplierDb(){return new Promise((resolve,reject)=>{const req=indexedDB.open(SUPPLIER_DB,1);req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('data'))req.result.createObjectStore('data')};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
+async function supplierDbGet(){try{const db=await supplierDb();return await new Promise((resolve,reject)=>{const r=db.transaction('data','readonly').objectStore('data').get('current');r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(r.error)})}catch(e){return null}}
+async function supplierDbPut(value){const db=await supplierDb();return new Promise((resolve,reject)=>{const tx=db.transaction('data','readwrite');tx.objectStore('data').put(value,'current');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
+let supplierUpdated={};
+function rebuildSupplierGroups(){const map=new Map();for(const r of supplierRows){const k=r.product.toLocaleLowerCase('ru-RU').replace(/\s+/g,' ').trim();let g=map.get(k);if(!g){g={name:r.product,items:[]};map.set(k,g)}g.items.push(r)}supplierGroups=Array.from(map.values());for(const g of supplierGroups)g.items.sort((a,b)=>a.price-b.price)}
+function renderSupplierUpdateInfo(){const el=$('supplierUpdateInfo');if(!el)return;const names=Object.keys(supplierUpdated);el.textContent=names.length?'Последнее обновление: '+names.map(n=>n+' — '+new Date(supplierUpdated[n]).toLocaleString('ru-RU')).join(' · '):'Прайсы ещё не загружены. После загрузки здесь появятся даты обновления поставщиков.'}
+function headerIndex(header,aliases){return header.findIndex(x=>aliases.includes(String(x||'').trim().toLocaleLowerCase('ru-RU')))}
+$('supplierFiles').addEventListener('change',async e=>{const files=[...e.target.files];if(!files.length)return;try{let imported=[],replaced=new Set();for(const file of files){const rows=/\.xlsx$/i.test(file.name)?await unzipXlsx(file):parseCSV(await file.text());if(rows.length<2)throw Error('В файле '+file.name+' нет строк с товарами');const h=rows[0].map(x=>String(x).trim().toLocaleLowerCase('ru-RU'));const pi=headerIndex(h,['product','товар','товары','наименование','название']);const pri=headerIndex(h,['price','цена','цены']);const bi=headerIndex(h,['brand','бренд','производитель']);const di=headerIndex(h,['datess','date','дата']);const fi=headerIndex(h,['firma','поставщик','фирма']);if(pi<0||pri<0||fi<0)throw Error('В '+file.name+' не найдены обязательные столбцы product, price и firma');let fileRows=rows.slice(1).map(r=>({product:String(r[pi]||'').trim(),price:Number(String(r[pri]||'').replace(',','.')),brand:bi>=0?String(r[bi]||'').trim():'',date:di>=0?String(r[di]||'').trim():'',firma:String(r[fi]||'').trim()})).filter(r=>r.product&&r.firma&&String(r.price)!==''&&Number.isFinite(r.price));if(!fileRows.length)throw Error('В '+file.name+' нет корректных строк с лекарствами и ценами');fileRows.forEach(r=>replaced.add(r.firma));imported.push(...fileRows)}if(!imported.length)throw Error('Нет строк для импорта');if(!confirm('Загружено строк: '+imported.length.toLocaleString('ru-RU')+'\nПоставщики для полной замены: '+[...replaced].join(', ')+'\n\nСтарые прайсы этих поставщиков будут заменены. Остальные поставщики и история закупок сохранятся. Продолжить?'))return;supplierRows=supplierRows.filter(r=>!replaced.has(r.firma)).concat(imported);const now=new Date().toISOString();replaced.forEach(n=>supplierUpdated[n]=now);await supplierDbPut({rows:supplierRows,updated:supplierUpdated});rebuildSupplierGroups();supplierReady=true;$('supplierDataStatus').textContent='Обновлено: '+imported.length.toLocaleString('ru-RU')+' строк · '+replaced.size+' поставщиков · всего '+supplierRows.length.toLocaleString('ru-RU')+' записей.';renderSupplierUpdateInfo();renderSupplierPrices();toast('Прайсы обновлены. Старые цены выбранных поставщиков заменены.')}catch(err){alert('Не удалось загрузить прайс: '+(err.message||'проверь формат Excel/CSV'))}e.target.value=''});
+
+$('clearSupplierPrices').addEventListener('click',async()=>{
+ if(!confirm('Удалить все загруженные прайсы поставщиков? История закупок, заявки, аптеки и каталог лекарств останутся без изменений.'))return;
+ try{
+  supplierRows=[];supplierUpdated={};await supplierDbPut({rows:[],updated:{}});
+  rebuildSupplierGroups();supplierReady=true;
+  $('supplierDataStatus').textContent='Все прайсы поставщиков очищены. Раздел пуст.';
+  $('supplierUpdateInfo').textContent='Прайсы не загружены.';
+  renderSupplierPrices();$('supplierResultsCount').textContent='';
+  toast('Удалены только прайсы поставщиков');
+ }catch(err){alert('Не удалось очистить прайсы: '+err.message)}
+});
+function renderSupplierPrices(){
+ const box=$('supplierResults');if(!box||!supplierReady)return;
+ const q=($('supplierSearch').value||'').trim().toLocaleLowerCase('ru-RU');
+ if(q.length<2){box.innerHTML='<div class="empty">Введи минимум 2 буквы для поиска.</div>';$('supplierResultsCount').textContent='';return}
+ const matches=supplierGroups.filter(g=>g.name.toLocaleLowerCase('ru-RU').includes(q)).slice(0,80);
+ $('supplierResultsCount').textContent='Найдено наименований: '+matches.length.toLocaleString('ru-RU')+' (показано до 80)';
+ box.innerHTML=matches.length?matches.map((g,i)=>{
+  const items=g.items,lowest=items[0].price,highest=items[items.length-1].price;
+  const lines=items.map(r=>'<div class="supplier-line"><span><b>'+esc(r.firma)+'</b>'+(r.brand?' · '+esc(r.brand):'')+(r.date&&r.date!=='-'?' · '+esc(r.date):'')+'</span><b>'+r.price.toLocaleString('ru-RU')+'</b></div>').join('');
+  return '<div class="item"><strong>'+esc(g.name)+'</strong><p class="muted">Предложений: '+items.length+' · от '+lowest.toLocaleString('ru-RU')+' до '+highest.toLocaleString('ru-RU')+'</p><div>'+lines+'</div><div class="actions"><button type="button" class="secondary" data-supplier-request="'+i+'">Создать заявку</button></div></div>';
+ }).join(''):'<div class="empty">Ничего не найдено.</div>';
+ box.querySelectorAll('[data-supplier-request]').forEach(btn=>btn.addEventListener('click',()=>{
+  const g=matches[Number(btn.dataset.supplierRequest)],pharmacyId=$('purchasePharmacy')?.value||'';
+  if(!pharmacyId){alert('Сначала добавь аптеку и выбери её в разделе «История закупок».');return}
+  const norm=v=>String(v||'').trim().toLocaleLowerCase('ru-RU').replace(/\\s+/g,' ');
+  if(data.requests.some(r=>r.pharmacyId===pharmacyId&&norm(r.medicine)===norm(g.name))){alert('Это лекарство уже есть в заявках выбранной аптеки.');return}
+  const priceInfo=g.items.map(r=>({price:r.price,brand:r.brand,firma:r.firma,date:r.date}));
+  const note='Цены поставщиков из прайс-листа:\\n'+g.items.map(r=>r.firma+' — '+r.price.toLocaleString('ru-RU')+(r.brand?' ('+r.brand+')':'')+(r.date&&r.date!=='-'?' · '+r.date:'')).join('\\n');
+  data.requests.unshift({id:crypto.randomUUID(),pharmacyId,medicine:g.name,note,supplierPrices:priceInfo,createdAt:new Date().toISOString()});
+  save();btn.textContent='Заявка создана ✓';btn.disabled=true;toast('Заявка создана. Цены всех поставщиков скопированы.');
+ }));
+}
+
+$('supplierSearch').addEventListener('input',renderSupplierPrices);
+
+// Синхронный поиск: один ввод одновременно заполняет оба поля.
+let syncingMedicineSearch=false;
+function syncMedicineSearch(sourceId,targetId){
+ const source=$(sourceId),target=$(targetId);
+ source.addEventListener('input',()=>{
+  if(syncingMedicineSearch)return;
+  syncingMedicineSearch=true;
+  if(target.value!==source.value){
+   target.value=source.value;
+   target.dispatchEvent(new Event('input',{bubbles:true}));
+  }
+  syncingMedicineSearch=false;
+ });
+}
+syncMedicineSearch('supplierSearch','purchaseSearch');
+syncMedicineSearch('purchaseSearch','supplierSearch');
+
+document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
+function render(){
+ $('countRequests').textContent=data.requests.length;
+ $('countPharmacies').textContent=data.pharmacies.length;
+ renderPurchasePharmacy();
+ $('pharmacy').innerHTML=data.pharmacies.length?data.pharmacies.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join(''):'<option value="">Сначала добавь аптеку</option>';
+ $('pharmacyList').innerHTML=data.pharmacies.length?data.pharmacies.map(p=>`<div class="item"><strong>${esc(p.name)}</strong><p class="muted">${data.requests.filter(r=>r.pharmacyId===p.id).length} заявок</p><div class="actions"><button class="danger" onclick="deletePharmacy('${p.id}')">Удалить аптеку</button></div></div>`).join(''):'<div class="empty">Аптек пока нет. Добавь первую выше.</div>';
+ renderAll();renderSearch();
+}
+$('pharmacyForm').addEventListener('submit',e=>{e.preventDefault();const name=$('pharmacyName').value.trim();if(!name)return;if(data.pharmacies.some(p=>p.name.toLowerCase()===name.toLowerCase())){toast('Такая аптека уже есть');return}data.pharmacies.push({id:crypto.randomUUID(),name});$('pharmacyName').value='';save();toast('Аптека добавлена')});
+$('requestForm').addEventListener('submit',e=>{e.preventDefault();const pharmacySelect=$('pharmacy');const pharmacyId=pharmacySelect.value;const medicine=$('medicine').value.trim();if(!pharmacyId){toast('Сначала добавь аптеку');switchTab('pharmacies');return}const norm=v=>String(v||'').trim().toLocaleLowerCase('ru-RU').replace(/\\s+/g,' ');const duplicate=data.requests.find(r=>r.pharmacyId===pharmacyId&&norm(r.medicine)===norm(medicine));if(duplicate){alert('Это лекарство уже есть в заявках выбранной аптеки. Проверь раздел «Все заявки».');$('medicine').value='';$('medicine').focus();return}data.requests.unshift({id:crypto.randomUUID(),pharmacyId,medicine,note:$('note').value.trim(),createdAt:new Date().toISOString()});$('requestForm').reset();save();$('pharmacy').value=pharmacyId;toast('Заявка сохранена')});
+function pharmacyName(id){return data.pharmacies.find(p=>p.id===id)?.name||'Аптека удалена'}
+function card(r){return `<div class="item"><label style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><input class="request-check" type="checkbox" value="${esc(r.id)}" style="width:auto"> Выбрать для удаления</label><strong>${esc(r.medicine)}</strong><p>🏥 ${esc(pharmacyName(r.pharmacyId))}</p>${r.note?`<p>📝 ${esc(r.note)}</p>`:''}${Array.isArray(r.purchaseHistory)&&r.purchaseHistory.length?`<details><summary>Полная история закупок (${r.purchaseHistory.length.toLocaleString('ru-RU')})</summary><div style="max-height:300px;overflow:auto">${r.purchaseHistory.map(x=>`<p>${esc(x.date)} — <b>${Number(x.price).toLocaleString('ru-RU')}</b> — ${esc(x.vendor)}</p>`).join('')}</div></details>`:''}<p class="muted">${new Date(r.createdAt).toLocaleString('ru-RU')}</p><div class="actions"><button class="secondary" onclick="editRequest('${r.id}')">Изменить</button><button class="danger" onclick="deleteRequest('${r.id}')">Удалить</button></div></div>`}
+function renderAll(){const filter=$('allPharmacyFilter');if(!filter)return;const selected=filter.value;filter.innerHTML='<option value="">Все аптеки</option>'+data.pharmacies.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');filter.value=data.pharmacies.some(p=>p.id===selected)?selected:'';const q=($('allRequestsSearch')?.value||'').trim().toLocaleLowerCase('ru-RU');const requests=data.requests.filter(r=>(!filter.value||r.pharmacyId===filter.value)&&(!q||[r.medicine,r.note,pharmacyName(r.pharmacyId)].some(v=>String(v||'').toLocaleLowerCase('ru-RU').includes(q))));$('allRequestsCount').textContent=`Показано заявок: ${requests.length} из ${data.requests.length}`;$('allRequests').innerHTML=requests.length?requests.map(card).join(''):'<div class="empty">По этому запросу заявки не найдены.</div>';updateSelectedCount()}
+function renderSearch(){if(!$('searchResults'))return;const q=($('searchInput')?.value||'').trim().toLowerCase();const matches=q?catalog.filter(n=>n.toLowerCase().includes(q)).slice(0,40):[];const requests=data.requests.filter(r=>!q||r.medicine.toLowerCase().includes(q));const catHtml=matches.map((n,i)=>`<div class="item"><strong>${esc(n)}</strong><div class="actions"><button type="button" class="secondary" data-catalog-index="${i}">Добавить в заявку</button></div></div>`).join('');$('searchResults').innerHTML=(matches.length?'<p class="muted">Найдено в каталоге (показаны до 40):</p>'+catHtml:'')+(requests.length?'<p class="muted">Заявки:</p>'+requests.map(card).join(''):'')||'<div class="empty">Совпадений нет.</div>';$('searchResults').querySelectorAll('[data-catalog-index]').forEach(button=>button.addEventListener('click',()=>chooseMedicine(matches[Number(button.dataset.catalogIndex)])))}
+function chooseMedicine(name){$('medicine').value=name;hideMedicineSuggestions();$('medicine').blur();toast('Название выбрано из каталога')}
+function hideMedicineSuggestions(){$('medicineSuggestions').classList.remove('open');$('medicineSuggestions').innerHTML=''}
+function renderMedicineSuggestions(){const input=$('medicine'),box=$('medicineSuggestions');const q=input.value.trim().toLocaleLowerCase('ru-RU');if(q.length<2||!catalog.length){hideMedicineSuggestions();return}const starts=[],contains=[];for(const name of catalog){const low=name.toLocaleLowerCase('ru-RU');if(low.startsWith(q))starts.push(name);else if(low.includes(q))contains.push(name);if(starts.length+contains.length>=60)break}const matches=starts.concat(contains).slice(0,40);if(!matches.length){hideMedicineSuggestions();return}box.innerHTML=matches.map((name,i)=>`<button type="button" class="suggestion" data-suggestion-index="${i}">${esc(name)}<small>Нажми, чтобы выбрать</small></button>`).join('');box.classList.add('open');box.querySelectorAll('[data-suggestion-index]').forEach(button=>button.addEventListener('click',()=>chooseMedicine(matches[Number(button.dataset.suggestionIndex)])))}
+$('allPharmacyFilter').addEventListener('change',renderAll);
+$('allRequestsSearch').addEventListener('input',renderAll);
+function updateSelectedCount(){const n=document.querySelectorAll('.request-check:checked').length;const el=$('selectedRequestsCount');if(el)el.textContent=`Отмечено: ${n}`}
+$('allRequests').addEventListener('change',e=>{if(e.target.classList.contains('request-check'))updateSelectedCount()});
+$('deleteSelectedRequests').addEventListener('click',()=>{const ids=[...document.querySelectorAll('.request-check:checked')].map(x=>x.value);if(!ids.length){alert('Сначала отметь заявки галочками.');return}if(!confirm(`Удалить выбранные заявки (${ids.length})?`))return;data.requests=data.requests.filter(r=>!ids.includes(r.id));save();renderAll();toast(`Удалено заявок: ${ids.length}`)});
+$('searchInput').addEventListener('input',renderSearch);
+$('medicine').addEventListener('input',renderMedicineSuggestions);
+$('medicine').addEventListener('focus',renderMedicineSuggestions);
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('.medicine-wrap'))hideMedicineSuggestions()});
+async function unzipXlsx(file){
+ const buf=await file.arrayBuffer(),view=new DataView(buf),bytes=new Uint8Array(buf);
+ let eocd=-1;for(let i=bytes.length-22;i>=Math.max(0,bytes.length-65558);i--){if(view.getUint32(i,true)===0x06054b50){eocd=i;break}}
+ if(eocd<0)throw Error('Повреждённый XLSX');
+ const count=view.getUint16(eocd+10,true),cdOffset=view.getUint32(eocd+16,true),entries={};let pos=cdOffset;
+ for(let i=0;i<count;i++){
+  if(view.getUint32(pos,true)!==0x02014b50)throw Error('Ошибка архива XLSX');
+  const method=view.getUint16(pos+10,true),csize=view.getUint32(pos+20,true),nlen=view.getUint16(pos+28,true),elen=view.getUint16(pos+30,true),clen=view.getUint16(pos+32,true),lo=view.getUint32(pos+42,true);
+  const name=new TextDecoder().decode(bytes.slice(pos+46,pos+46+nlen));
+  const lnl=view.getUint16(lo+26,true),lel=view.getUint16(lo+28,true),start=lo+30+lnl+lel;
+  entries[name]={method,data:bytes.slice(start,start+csize)};pos+=46+nlen+elen+clen;
+ }
+ async function read(name){const x=entries[name];if(!x)return '';if(x.method===0)return new TextDecoder().decode(x.data);if(x.method!==8)throw Error('Неподдерживаемое сжатие XLSX');if(!('DecompressionStream'in window))throw Error('Этот браузер не поддерживает чтение XLSX. Сохрани файл как CSV.');const stream=new Blob([x.data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));return await new Response(stream).text()}
+ const ssXml=await read('xl/sharedStrings.xml'),shared=[];
+ if(ssXml){const doc=new DOMParser().parseFromString(ssXml,'application/xml');doc.querySelectorAll('si').forEach(si=>shared.push(Array.from(si.querySelectorAll('t')).map(t=>t.textContent).join('')))}
+ let sheet='xl/worksheets/sheet1.xml';
+ const wb=await read('xl/workbook.xml'),rels=await read('xl/_rels/workbook.xml.rels');
+ if(wb&&rels){const wd=new DOMParser().parseFromString(wb,'application/xml'),rd=new DOMParser().parseFromString(rels,'application/xml');const first=wd.querySelector('sheet');const rid=first?.getAttribute('r:id');const rel=Array.from(rd.querySelectorAll('Relationship')).find(x=>x.getAttribute('Id')===rid);if(rel){let target=rel.getAttribute('Target').replace(/^\//,'');sheet=target.startsWith('xl/')?target:'xl/'+target}}
+ const xml=await read(sheet);if(!xml)throw Error('Не найден первый лист Excel');const doc=new DOMParser().parseFromString(xml,'application/xml');
+ return Array.from(doc.querySelectorAll('sheetData row')).map(row=>{const cells=[];row.querySelectorAll('c').forEach(c=>{const ref=c.getAttribute('r')||'A1',letters=ref.match(/[A-Z]+/i)?.[0]||'A';let idx=0;for(const ch of letters.toUpperCase())idx=idx*26+ch.charCodeAt(0)-64;idx--;const type=c.getAttribute('t');let value='';if(type==='s'){const v=c.querySelector('v');value=shared[Number(v?.textContent)]||''}else if(type==='inlineStr'){value=Array.from(c.querySelectorAll('is t')).map(t=>t.textContent).join('')}else value=c.querySelector('v')?.textContent||'';cells[idx]=value});return cells.map(x=>x??'')});
+}
+$('catalogFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const isXlsx=/\.xlsx$/i.test(f.name);const rows=isXlsx?await unzipXlsx(f):parseCSV(await f.text());if(rows.length<2)throw Error('empty');const header=rows[0].map(x=>String(x).trim().toLowerCase());let col=header.findIndex(x=>['лекарство','product','название','наименование','товар','товары'].includes(x));if(col<0)col=0;const names=[...new Map(rows.slice(1).map(r=>String(r[col]??'').replace(/^\uFEFF/,'').trim()).filter(Boolean).map(n=>[n.toLocaleLowerCase('ru-RU'),n])).values()];if(!names.length)throw Error('empty');if(!confirm('Найдено '+names.length.toLocaleString('ru-RU')+' названий. Загрузить их? Текущий каталог будет заменён, заявки и аптеки сохранятся.'))return;catalog=names;saveCatalog()}catch(err){alert('Не удалось прочитать файл: '+(err.message||'ошибка формата')+'. Выбери Excel .xlsx или CSV. В Excel названия должны быть в первом листе, в столбце product или название.')}e.target.value=''});;
+$('clearCatalog').addEventListener('click',()=>{if(!catalog.length)return;if(confirm('Очистить каталог лекарств? Заявки останутся без изменений.')){catalog=[];localStorage.removeItem(CATALOG_KEY);renderCatalogInfo();renderSearch();toast('Каталог очищен')}});
+function deleteRequest(id){if(!confirm('Удалить эту заявку?'))return;data.requests=data.requests.filter(r=>r.id!==id);save();toast('Заявка удалена')}
+function deletePharmacy(id){if(data.requests.some(r=>r.pharmacyId===id)){alert('Нельзя удалить аптеку, пока у неё есть заявки. Сначала удали её заявки.');return}if(!confirm('Удалить аптеку?'))return;data.pharmacies=data.pharmacies.filter(p=>p.id!==id);save();toast('Аптека удалена')}
+function editRequest(id){const r=data.requests.find(x=>x.id===id);if(!r)return;const med=prompt('Название лекарства:',r.medicine);if(med===null)return;const note=prompt('Комментарий:',r.note);if(note===null)return;r.medicine=med.trim();r.note=note.trim();save();toast('Изменения сохранены')}
+function csvCell(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
+$('csvBtn').addEventListener('click',()=>{const rows=[['Аптека','Лекарство','Комментарий','Дата'],...data.requests.map(r=>[pharmacyName(r.pharmacyId),r.medicine,r.note,new Date(r.createdAt).toLocaleString('ru-RU')])];const csv='\uFEFF'+rows.map(row=>row.map(csvCell).join(';')).join('\r\n');download(new Blob([csv],{type:'text/csv;charset=utf-8'}),'apteki_'+dateStamp()+'.csv');toast('Таблица подготовлена')});
+$('backupBtn').addEventListener('click',async()=>{download(new Blob([JSON.stringify({...data,catalog,purchaseHistory,supplierRows,supplierUpdated},null,2)],{type:'application/json'}),'apteki_backup_'+dateStamp()+'.json');toast('Резервная копия подготовлена')});
+$('restoreFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const parsed=JSON.parse(await f.text());if(!Array.isArray(parsed.pharmacies)||!Array.isArray(parsed.requests))throw Error();if(!confirm('Заменить текущую базу данными из файла?'))return;data={pharmacies:parsed.pharmacies,requests:parsed.requests};catalog=Array.isArray(parsed.catalog)?parsed.catalog:catalog;if(Array.isArray(parsed.purchaseHistory)){purchaseHistory=parsed.purchaseHistory;savePurchases();rebuildPurchaseIndex()}if(Array.isArray(parsed.supplierRows)){supplierRows=parsed.supplierRows;supplierUpdated=parsed.supplierUpdated||{};await supplierDbPut({rows:supplierRows,updated:supplierUpdated});rebuildSupplierGroups();supplierReady=true}localStorage.setItem(CATALOG_KEY,JSON.stringify(catalog));save();renderCatalogInfo();toast('База восстановлена')}catch(err){alert('Не удалось прочитать копию. Выбери правильный JSON-файл.')}e.target.value=''});
+function dateStamp(){return new Date().toISOString().slice(0,10)}
+function download(blob,name){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500)}
+if('serviceWorker'in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+render();renderCatalogInfo();
+</script>
+
+<footer style="text-align:center;padding:18px 12px 28px;color:#64748b;font-size:12px">Моя аптечная база · Версия 17.1</footer>
+</body>
+</html>
